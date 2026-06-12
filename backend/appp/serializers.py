@@ -1,36 +1,38 @@
 from rest_framework import serializers
-from .models import User
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import User, Role
 
-class RegisterSerializer(serializers.ModelSerializer):
-    confirm_password = serializers.CharField(write_only=True)
-    role = serializers.CharField()
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Role
+        fields = "__all__"
+
+
+class UserSerializer(serializers.ModelSerializer):
+    role_detail = RoleSerializer(source="role", read_only=True)
 
     class Meta:
-        model = User
-        fields = ['username', 'email', 'first_name', 'gender', 'password', 'role', 'avatar']
+        model  = User
+        fields = ["id", "email", "      username", "first_name", "last_name",
+                  "role", "role_detail", "avatar", "is_active", "date_joined"]
+        extra_kwargs = {"password": {"write_only": True}}
+
+    def create(self, validated):
+        pw = validated.pop("password", None)
+        user = User(**validated)
+        if pw: user.set_password(pw)
+        user.save()
+        return user
 
 
-    def validate (self, data):
-        if data["password"] != data['confirm_password']:
-            raise serializers.ValidationError("password do not match")
-        return data
-
-    def create (self, validated_data):
-        validated_data.pop('confirm_password')
-        role = validated_data.pop("role")
-        return User.objects.create_user(**validated_data)
-    
-
-class UpdateAvatarSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['avatar']
+class CustomTokenSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["email"] = user.email
+        token["role"]  = user.role.name if user.role else None
+        return token
 
 
-
-class UserProfileSerializer(serializers.ModelSerializer):
-    gender = serializers.ChoiceField(
-        choices = UserProfile.GENDER_CHOICES,
-        required = False,
-        allow_blank = True
-    )
