@@ -44,6 +44,21 @@ MIDDLEWARE = [
     "django.template.backends.django.DjangoTemplates",
 ]
 
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "employees.authentication.CookieJWTAuthentication",
+    ),
+}
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+
+AUTH_USER_MODEL = "appp.Employee"
+
+
 ROOT_URLCONF = "backend.urls"
 
 DATABASES = {

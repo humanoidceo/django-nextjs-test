@@ -1,104 +1,149 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { Employee, EmployeeInput, getEmployees, createEmployee, updateEmployee, deleteEmployee } from "../api/employees";
+import axios from "axios";
+import { useRouter } from "next/navigation";
+
+axios.defaults.withCredentials = true;
+
+interface Employee {
+    id: number;
+    name: string;
+    position: string;
+    salary: string;
+}
+
+const API_URL = "http://localhost:8000/employees/";
+const ME_URL = "http://localhost:8000/me/";
 
 export default function AddTaskPage() {
-    const [name, setName] = useState("");
-    const [position, setPosition] = useState("");
-    const [salary, setSalary] = useState("");
+    const router = useRouter();
+
+    const [authChecked, setAuthChecked] = useState(false);
+    const [authorized, setAuthorized] = useState(false);
+
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
 
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [editValue, setEditValue] = useState<EmployeeInput>({
-        name: "",
-        position: "",
-        salary: "",
-    });
+    // Form fields for adding a new employee
+    const [name, setName] = useState("");
+    const [position, setPosition] = useState("");
+    const [salary, setSalary] = useState("");
 
-    const [createTrigger, setCreateTrigger] = useState<EmployeeInput | null>(null);
-    const [updateTrigger, setUpdateTrigger] = useState<{ id: number; data: EmployeeInput } | null>(null);
+    // Fields for editing an existing employee
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editName, setEditName] = useState("");
+
+    // Triggers: setting these starts the corresponding useEffect below
+    const [addTrigger, setAddTrigger] = useState<{ name: string; position: string; salary: string } | null>(null);
+    const [updateTrigger, setUpdateTrigger] = useState<{ id: number; name: string } | null>(null);
     const [deleteTrigger, setDeleteTrigger] = useState<number | null>(null);
 
+    // Check the logged-in user's role before showing the page
     useEffect(() => {
-        getEmployees()
-            .then(setEmployees)
-            .catch(err => setError(err.response?.data?.message || err.message));
+        axios.get(ME_URL)
+            .then(response => {
+                const role = response.data.role;
+                if (role === "admin" || role === "super_admin") {
+                    setAuthorized(true);
+                } else {
+                    router.push("/");
+                }
+            })
+            .catch(() => {
+                router.push("/login");
+            })
+            .finally(() => setAuthChecked(true));
     }, []);
 
+    // Load all employees once we know the user is authorized
     useEffect(() => {
-        if (!createTrigger) return;
+        if (!authorized) return;
+
+        axios.get(API_URL)
+            .then(response => setEmployees(response.data))
+            .catch(err => setError(err.message));
+    }, [authorized]);
+
+    // Add a new employee
+    useEffect(() => {
+        if (!addTrigger) return;
 
         setError("");
         setLoading(true);
 
-        createEmployee(createTrigger)
-            .then(newEmployee => {
-                setEmployees(prev => [...prev, newEmployee]);
+        axios.post(API_URL, addTrigger)
+            .then(response => {
+                setEmployees([...employees, response.data]);
                 setName("");
                 setPosition("");
                 setSalary("");
             })
-            .catch(err => setError(err.response?.data?.message || err.message))
+            .catch(err => setError(err.message))
             .finally(() => {
                 setLoading(false);
-                setCreateTrigger(null);
+                setAddTrigger(null);
             });
-    }, [createTrigger]);
+    }, [addTrigger]);
 
+    // Update an existing employee
     useEffect(() => {
         if (!updateTrigger) return;
 
         setError("");
 
-        updateEmployee(updateTrigger.id, updateTrigger.data)
-            .then(updated => {
-                setEmployees(prev => prev.map(e => e.id === updateTrigger.id ? updated : e));
+        axios.put(`${API_URL}${updateTrigger.id}/`, { name: updateTrigger.name })
+            .then(response => {
+                const updatedEmployees = employees.map(emp =>
+                    emp.id === updateTrigger.id ? response.data : emp
+                );
+                setEmployees(updatedEmployees);
                 setEditingId(null);
-                setEditValue({ name: "", position: "", salary: "" });
+                setEditName("");
             })
-            .catch(err => setError(err.response?.data?.message || err.message))
+            .catch(err => setError(err.message))
             .finally(() => setUpdateTrigger(null));
     }, [updateTrigger]);
 
+    // Delete an employee
     useEffect(() => {
         if (deleteTrigger === null) return;
 
         setError("");
 
-        deleteEmployee(deleteTrigger)
-            .then(() => setEmployees(prev => prev.filter(e => e.id !== deleteTrigger)))
-            .catch(err => setError(err.response?.data?.message || err.message))
+        axios.delete(`${API_URL}${deleteTrigger}/`)
+            .then(() => {
+                const remainingEmployees = employees.filter(emp => emp.id !== deleteTrigger);
+                setEmployees(remainingEmployees);
+            })
+            .catch(err => setError(err.message))
             .finally(() => setDeleteTrigger(null));
     }, [deleteTrigger]);
 
-    const visibleEmployees = employees.filter(e =>
-        e.name.toLowerCase().includes(search.toLowerCase())
-    );
-
-    function handleSubmit() {
-        setCreateTrigger({ name, position, salary });
-    }
-
-    function startEdit(e: Employee) {
-        setEditingId(e.id);
-        setEditValue({ name: e.name, position: e.position, salary: e.salary });
+    function startEdit(employee: Employee) {
+        setEditingId(employee.id);
+        setEditName(employee.name);
     }
 
     function cancelEdit() {
         setEditingId(null);
-        setEditValue({ name: "", position: "", salary: "" });
+        setEditName("");
     }
 
-    function saveEdit(id: number) {
-        setUpdateTrigger({ id, data: editValue });
+    // Only show employees whose name matches the search box
+    const visibleEmployees = employees.filter(emp =>
+        emp.name.toLowerCase().includes(search.toLowerCase())
+    );
+
+    // Don't show anything until we know if the user is allowed here
+    if (!authChecked) {
+        return <p>Loading...</p>;
     }
 
-    function deleteTask(id: number) {
-        setDeleteTrigger(id);
+    if (!authorized) {
+        return null;
     }
 
     return (
@@ -109,6 +154,7 @@ export default function AddTaskPage() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
             />
+
             <input
                 type="text"
                 value={name}
@@ -131,30 +177,32 @@ export default function AddTaskPage() {
                 maxLength={5}
             />
 
-            <button onClick={handleSubmit} disabled={loading || !name.trim()}>
+            <button onClick={() => setAddTrigger({ name, position, salary })} disabled={loading || !name.trim()}>
                 {loading ? "Adding..." : "add task"}
             </button>
 
             {error && <p style={{ color: "red" }}>{error}</p>}
 
             <ul>
-                {visibleEmployees.map(e => (
-                    <li key={e.id}>
-                        {editingId === e.id ? (
+                {visibleEmployees.map(employee => (
+                    <li key={employee.id}>
+                        {editingId === employee.id ? (
                             <>
                                 <input
                                     type="text"
-                                    value={editValue.name}
-                                    onChange={ev => setEditValue(prev => ({ ...prev, name: ev.target.value }))}
+                                    value={editName}
+                                    onChange={e => setEditName(e.target.value)}
                                 />
-                                <button onClick={() => saveEdit(e.id)} disabled={!editValue.name.trim()}>Save</button>
+                                <button onClick={() => setUpdateTrigger({ id: employee.id, name: editName })} disabled={!editName.trim()}>
+                                    Save
+                                </button>
                                 <button onClick={cancelEdit}>Cancel</button>
                             </>
                         ) : (
                             <>
-                                {e.name} (id = {e.id})
-                                <button onClick={() => startEdit(e)}>Edit</button>
-                                <button onClick={() => deleteTask(e.id)}>Delete</button>
+                                {employee.name} (id = {employee.id})
+                                <button onClick={() => startEdit(employee)}>Edit</button>
+                                <button onClick={() => setDeleteTrigger(employee.id)}>Delete</button>
                             </>
                         )}
                     </li>

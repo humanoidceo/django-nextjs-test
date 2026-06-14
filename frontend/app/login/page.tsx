@@ -8,50 +8,43 @@ axios.defaults.withCredentials = true;
 
 const API_URL = "http://localhost:8000";
 
-export default function RegisterPage() {
+export default function LoginPage() {
     const router = useRouter();
 
-    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
 
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
-    // Trigger: setting this starts the registration request below
-    const [registerTrigger, setRegisterTrigger] = useState<{ name: string; email: string; password: string } | null>(null);
+    // Trigger: setting this starts the login request below
+    const [loginTrigger, setLoginTrigger] = useState<{ email: string; password: string } | null>(null);
 
     useEffect(() => {
-        if (!registerTrigger) return;
+        if (!loginTrigger) return;
 
         setError("");
         setLoading(true);
 
-        axios.post(`${API_URL}/register/`, registerTrigger)
+        axios.post(`${API_URL}/login/`, loginTrigger)
             .then(() => {
-                router.push("/login");
+                router.push("/");
             })
             .catch(err => setError(err.response?.data?.detail || err.message))
             .finally(() => {
                 setLoading(false);
-                setRegisterTrigger(null);
+                setLoginTrigger(null);
             });
-    }, [registerTrigger]);
+    }, [loginTrigger]);
 
     function handleSubmit() {
-        setRegisterTrigger({ name, email, password });
+        setLoginTrigger({ email, password });
     }
 
     return (
         <div>
-            <h1>Create account</h1>
+            <h1>Log in</h1>
 
-            <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Name"
-            />
             <input
                 type="email"
                 value={email}
@@ -67,9 +60,9 @@ export default function RegisterPage() {
 
             <button
                 onClick={handleSubmit}
-                disabled={loading || !name.trim() || !email.trim() || !password.trim()}
+                disabled={loading || !email.trim() || !password.trim()}
             >
-                {loading ? "Creating account..." : "Register"}
+                {loading ? "Logging in..." : "Log in"}
             </button>
 
             {error && <p style={{ color: "red" }}>{error}</p>}

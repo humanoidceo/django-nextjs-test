@@ -1,7 +1,10 @@
 from django.urls import path
-from .views import EmployeeListCreateView, EmployeeDetailView
+from .views import LoginView, RefreshView, LogoutView, MeView, RegisterView
 
 urlpatterns = [
-    path('employees/', EmployeeListCreateView.as_view(), name='employee-list-create'),
-    path('employees/<int:pk>/', EmployeeDetailView.as_view(), name='employee-detail'),
+    path("register/", RegisterView.as_view(), name="register"),
+    path("login/", LoginView.as_view(), name="login"),
+    path("login/refresh/", RefreshView.as_view(), name="token_refresh"),
+    path("logout/", LogoutView.as_view(), name="logout"),
+    path("me/", MeView.as_view(), name="me"),
 ]
